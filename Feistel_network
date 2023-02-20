@@ -1,0 +1,232 @@
+
+#include <windows.h>
+#include <iostream>
+#include <fstream>
+#include <conio.h>
+#include <stdio.h>
+#include <string>
+
+using namespace std;
+
+HANDLE hConsole;
+
+//Функция для транспортного декодирования расшифрованого текста
+unsigned char Base16_decoding(unsigned char b) {
+    unsigned char table[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };
+    int j;
+
+    if (b > 64) {
+        j = b-7;
+    }
+    else {
+        j = b;
+    }
+
+    j = j & 0x0F;
+    return j;
+}
+
+// функция сложения по модулю 16
+unsigned char F1(unsigned char Ri, unsigned char ki) {
+    Ri = (Ri + ki) % 16;
+    return Ri;
+}
+
+// Функция циклического сдвига влево на 3 бита
+unsigned char F2(unsigned char Ri) {
+
+    unsigned char u;
+    u = Ri & 0x01;
+    u = u << 3;
+    Ri = Ri >> 1;
+    Ri = Ri | u;      
+    return Ri;
+}
+
+// Функция подстановок
+unsigned char F3(unsigned char Ri) {
+
+    int left[] = { 0,2,3,1 };// таблица подстановок 1
+    int right[] = { 2,0,1,3 };// таблица подстановок 2
+
+    unsigned char l, r;
+
+        l = Ri >> 2;
+        l = (left[l]<<2);// подстановка левых двух бит
+
+        r = Ri & 0x03;
+        r = right[r];// подстановка правых двух бит
+
+        Ri = l | r;//сохранение полной подстановки полублока
+   
+    return Ri;
+}
+
+unsigned char Feistel_crypting(unsigned char w, unsigned char K) {
+
+    unsigned char Li, Ri;
+    unsigned char block;
+
+    Li = w & 0xF0; // взятие левого полублока
+    Ri = w & 0x0F;  // взятие правого полублока
+    Li = Li >> 4;
+
+    unsigned char ki[3];// создание массива для дробления ключа
+
+    ki[0] = K >> 4;// взятие первых 4х бит ключа
+    ki[1] = K & 0x0F;// взятие последних 4х бит ключа
+    ki[2] = K >> 4;// взятие первых 4х бит ключа
+        
+    //выполнение трех раундов
+    for (int i = 0; i < 3; i++) {
+        block = Ri;
+        Ri = F1(Ri, ki[i]);//логическое сложение с частью ключа
+        Ri = F2(Ri);//циклический сдвиг
+        Ri = F3(Ri);//подстановки
+     
+        Ri = Ri ^ Li;// XOR с левым блоком
+
+        Li = block;          
+    }
+
+    Ri = Ri << 4;
+    w = Li | Ri;
+   
+    return w;
+}
+
+void encrypt(unsigned char K) {
+
+    int w;
+    unsigned char Block[2];
+    unsigned char table[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };// массив значений для base16
+       
+    ofstream encryption;
+    encryption.open("encryption.txt");
+    ifstream user;
+    user.open("user.txt");
+   
+    //шифрование файла
+    SetConsoleTextAttribute(hConsole, 15);
+    cout << "\n\n ------------------\n зашифрований файл:\n\n ";
+    SetConsoleTextAttribute(hConsole, 14);
+    if (user.is_open()) {
+
+        w = user.get();
+
+        while (w != EOF) {
+           
+            w = Feistel_crypting((char)w, K);
+           
+            cout << (char)w;
+            
+            Block[0] = ((char)w >> 4) & 0x0F;
+            Block[1] = (char)w & 0x0F;
+
+            Block[0] = table[Block[0]];
+            Block[1] = table[Block[1]];
+
+            encryption.put(Block[0]);
+            encryption.put(Block[1]);
+            cout <<"- "<< (char)Block[0] << (char)Block[1] << " | ";
+           
+            w = user.get();
+        }
+    }
+    else {
+        cout << "\n Failed to open file!\n";
+    }
+
+    encryption.close();
+    user.close();
+   
+    ifstream base;
+    base.open("encryption.txt");
+    SetConsoleTextAttribute(hConsole, 15);
+    cout << "\n\n -------------------------------------------------------\n зашифрований файл пiсля транспортного кодування Base16:\n\n ";
+    SetConsoleTextAttribute(hConsole, 14);
+    int l = 1;
+    if (base.is_open()) {
+
+        w = base.get();
+
+        while (w != EOF) {
+
+            cout << (char)w;
+            if (l % 2 == 0) {
+                cout << " ";
+            }
+            w = base.get();
+            l++;
+        }
+
+    }
+    else {
+        cout << "\n Failed to open file!\n";
+    }
+    base.close();
+}
+
+void decrypt(unsigned char K) {
+    int w, b1, b2, block;
+   
+    ofstream base16_decrypt;
+    base16_decrypt.open("decryption.txt");
+    ifstream base16;
+    base16.open("encryption.txt");
+   
+    SetConsoleTextAttribute(hConsole, 15);
+    cout << "\n\n --------------------------------\n декодування та розшифрування зашифрованого файлу:\n\n ";
+    SetConsoleTextAttribute(hConsole, 14);
+    //транспортное декодирование зашифрованого файла
+    if (base16.is_open()) {
+
+        b1 = base16.get();
+        b2 = base16.get();
+
+        while (b2 != EOF || b1 != EOF) {
+
+            b1 = Base16_decoding(b1);
+            b2 = Base16_decoding(b2);
+
+            block = b1 << 4;
+            w = block  | b2;
+            // получение из двух 8битных символов один 8битный
+           
+            w = Feistel_crypting((char)w, K);
+
+            cout << (char)w;
+           
+            base16_decrypt.put((char)w);
+            b1 = base16.get();
+            b2 = base16.get();
+        }
+
+    }
+    else {
+        cout << "\n Failed to open file!\n";
+    }
+
+    base16_decrypt.close();
+    base16.close();
+    
+}
+
+int main()
+{
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    setlocale(LC_ALL, "rus");
+    system("cls");
+    
+    cout << "\n Прикладна криптологiя Лр#3. Ткаченко Кирило 936гр. Варiант-4";
+
+    unsigned char K ='j';// 8битный ключ
+      
+    encrypt(K);
+    decrypt(K);
+
+    SetConsoleTextAttribute(hConsole, 15);
+    cout << "\n\n\n ";
+    system("echo Натисніть будь-яку клавішу для продовження...");
+    system("pause > nul");
+}
