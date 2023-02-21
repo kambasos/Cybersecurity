@@ -1,0 +1,69 @@
+
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include<cmath>
+#include <windows.h>
+#include <stdio.h>
+
+using namespace std;
+
+unsigned long R0=7;//начальное значение
+unsigned long R1;//R0+1
+unsigned long M = (pow(2, 31) - 1);//модуль
+unsigned long k = 1220703125;//множитель
+unsigned long b = 7;//приращение
+
+//Вывод числа в двоичном виде
+string toBinary(int n, int len)
+{
+    string binary;
+    for (unsigned i = (1 << len - 1); i > 0; i = i / 2) {
+        binary += (n & i) ? "1" : "0";
+    }
+
+    return binary;
+}
+
+//Функция: Линейный конгруэнтный метод
+int lkm_metod() {
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    unsigned long R1;
+
+    R0 = st.wSecond + st.wMinute * 100 + st.wDay * 10000 + st.wHour * 1000000 + st.wMilliseconds * 100000000;
+    int n = 10;
+
+    for (int i = 0; i < n; i++){
+    R1 = ((k * R0) + b) % M;
+    R0 = R1;
+     }
+           
+    //ri + 1 = mod(k · ri + b, M).
+    return R1;
+}
+
+int main()
+{
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    setlocale(LC_ALL, "rus");
+    system("cls");
+
+    long random_number;
+
+    cout << "\n\n ГПСЧ. Линейный конгруэнтный метод:\n ";
+    cout << "\n Время системы:\n ";
+    cout << st.wYear << "\n ";
+    cout << st.wMonth << "\n ";
+    cout << st.wDay << "\n ";
+    cout << st.wHour << "\n ";
+    cout << st.wMinute << "\n ";
+    cout << st.wSecond << "\n ";
+    cout << st.wMilliseconds << "\n\n";
+
+    R1 = lkm_metod();
+    cout << "\n R=" << R1<<"; bin="<< toBinary( R1,  32);
+    cout << "\n\n\n\n";
+    return 0;
+}
