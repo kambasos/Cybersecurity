@@ -1,0 +1,134 @@
+#include <windows.h>
+#include <iostream>
+#include <fstream>
+#include <conio.h>
+#include <stdio.h>
+#include <string>
+
+using namespace std;
+
+HANDLE hConsole;
+
+void caesar_encryption(int n, int k) {
+	int number;
+
+	ofstream encryption;
+	encryption.open("encryption.txt");
+
+	ifstream user;
+	user.open("user.txt");
+
+	if (user.is_open()) {
+
+		number = user.get();
+
+		while (number != EOF) {
+
+			if (0 <= number && number <= 31) {
+				number = number;
+			}
+			else{
+				number = (number - 32 + k) % n + 32;
+			}
+			
+			cout << (char)number;
+
+			encryption.put(number);
+			number = user.get();
+		}
+
+	}
+	else {
+		cout << "\n Failed to open file!\n";
+	}
+
+	encryption.close();
+	user.close();
+}
+
+void caesar_decryption(int k,int n) {
+	int number;
+
+	ofstream decryption;
+	decryption.open("decryption.txt");
+
+	ifstream encryption1;
+	encryption1.open("encryption.txt");
+
+	if (encryption1.is_open()) {
+
+		number = encryption1.get();
+
+		while (number != EOF) {
+
+
+			if (number > 31) {
+
+				number = (number - 32 + 224 - (k % n)) % 224 + 32;
+			}
+			
+			cout << (char)number;
+
+			decryption.put(number);
+			number = encryption1.get();
+		}
+
+	}
+	else {
+		cout << "\n Failed to open file!\n";
+	}
+
+	decryption.close();
+	encryption1.close();
+
+}
+
+int main()
+{
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	system("cls");
+	setlocale(LC_ALL, "ru");
+	SetConsoleCP(1251); // Ввод с консоли в кодировке 1251
+	SetConsoleOutputCP(1251); // Вывод на консоль в кодировке 1251
+	cout << 255 % 224;
+	SetConsoleTextAttribute(hConsole, 15);
+	cout << "\n Криптологiя. Лабораторна робота #1. Шифр Цезаря\n";
+
+	ifstream user_count;
+	user_count.open("user.txt");
+	int a= user_count.get();
+
+	SetConsoleTextAttribute(hConsole,15);
+	cout << "\n Вхiдний текст користувача для шифрування:\n ";
+	SetConsoleTextAttribute(hConsole, 2);
+	while (a != EOF)
+	{
+		cout<< (char)a;
+		a = user_count.get();
+	}
+	cout << endl;
+
+	user_count.close();
+		
+	int K=3;
+	const int N = 224;
+	int number;
+
+	SetConsoleTextAttribute(hConsole, 14);
+	cout << endl << " Ключ для шифрування К="<<K;
+
+	SetConsoleTextAttribute(hConsole, 15);
+	cout << endl << endl << " Шифр початковго тексту: \n ";
+	SetConsoleTextAttribute(hConsole, 2);
+	caesar_encryption(N, K);
+
+	SetConsoleTextAttribute(hConsole, 15);
+	cout << endl << endl << " Дешифрування тексту: \n ";
+	SetConsoleTextAttribute(hConsole, 2);
+	caesar_decryption(K, N);
+
+	SetConsoleTextAttribute(hConsole, 15);
+	cout << endl << endl;
+	system("echo  Натисніть будь-яку клавішу для продовження...");
+	system("pause > nul");
+}
