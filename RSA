@@ -1,0 +1,452 @@
+# Cybersecurity
+
+
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+#include <windows.h>
+#include <stdio.h>
+#include <fstream>
+#include <bitset>
+#include <string>
+
+using namespace std;
+
+unsigned long R0= 4268537595;
+unsigned long R1= 1239671598;
+unsigned long long R2;
+
+string toBinary(unsigned long n, int len)
+{
+    string binary;
+    for (unsigned i = (1 << len - 1); i > 0; i = i / 2) {
+        binary += (n & i) ? "1" : "0";
+    }
+    return binary;
+}
+
+void seed_time() {
+
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+
+    R0 = st.wMilliseconds + st.wHour * 1000 + st.wSecond * 10000 + st.wDay * 10000000 + st.wMinute * 1000000000;
+    R1 = st.wSecond + st.wMinute * 100 + st.wDay * 10000 + st.wHour * 1000000 + st.wMilliseconds * 100000000;
+}
+
+unsigned long msp_random(unsigned long max=100) {
+      
+    R2 = R0;
+    R2 = R2 * R1; 
+    R2 = R2 >> 16;     
+    R2 = R2 & 0xFFFFFFFF;    
+    R0 = R1; R1 = R2;
+    return R1%max;
+}
+
+// Алгоритм Евкліда
+unsigned long gcd(unsigned long a,unsigned long b) {
+       
+    if (a < b) {
+        swap(a, b);
+    }
+
+    unsigned long x = a, y = b;
+
+    while (y) {
+        x %= y;
+        swap(x, y);
+    }
+    //cout << endl << endl << " Найбiльший спiльний дiльник чисел " << a << " i " << b << ": " << x;
+    return x;
+}
+
+// Розширений алгоритм Евкліда
+unsigned long evklid_metod(unsigned long e, unsigned long phi) {
+
+    unsigned long d0 = 1, d1 = 0, y0 = 0, y1 = 1;
+    unsigned long q, r, dn, yn;
+
+    unsigned long d, y;
+    int i = 1;
+
+    while (true) {
+        q = e / phi;
+        r = e % phi;
+        e = phi;
+        phi = r;
+
+        dn = d0 + d1 * q;
+        d0 = d1;
+        d1 = dn;
+
+        yn = y0 + y1 * q;
+        y0 = y1;
+        y1 = yn;
+
+        i += 1;
+        if (r == 0) {
+            break;
+        }
+    }
+    
+    if (i % 2 == 0) {
+        d = d1 - d0;
+        y = y1 - y0;
+    }
+    else {
+        d = d0;
+        y = y0;
+    }
+    cout << "\n d=" << d << "; y=" << y;
+    return d;
+}
+
+
+// a^m mod(n)
+unsigned long mod_power(unsigned long a, unsigned long m , unsigned long n) {
+
+    unsigned long long P = 1;
+    unsigned long long Mi = a % n;
+
+    unsigned long b;
+
+    for (int i = 0; i < 22; i++) {
+        b = (m >> i)&1;
+
+        if (b != 0) {
+            P = (P * Mi) % n;
+        }
+
+        Mi = (Mi * Mi) % n;
+    }
+
+    return P;
+}
+
+// Алгоритм Лемана
+bool lehman(unsigned long n, int k = 10) {
+    for (int i = 0; i < k; i++) {
+        unsigned long a = msp_random(n - 2) + 2;
+        
+        unsigned long exp = (n - 1) / 2;
+        unsigned long r = mod_power(a, exp,n);
+            
+            if (r != 1 && r != n - 1) {
+                return false;
+            }
+    }
+    return true;
+}
+
+// Put keys to file
+void File_keys(unsigned long& e, unsigned long& d, unsigned long& n) {
+    ofstream open("key_public.txt");
+    ofstream secret("key_private.txt");
+
+    if (open.is_open() && secret.is_open()) {
+        open<<(to_string(n));
+        open << " ";
+        open << (to_string(e));
+
+        secret << (to_string(n));
+        secret << " ";
+        secret << (to_string(d));
+    }
+    open.close();
+    secret.close();
+}
+
+// Generation keys for RSA
+void KeysGen( unsigned long max = 0x800, int k = 10) {
+
+    unsigned long e, d, n;
+    unsigned long p=0, q=0, phi=0;
+
+   do {
+        p = msp_random(max)| 0x401;
+   } while (!lehman(p, k));
+   cout << "\n p=" << p;
+   do {
+        q = msp_random(max)| 0x401;
+    } while (!lehman(q, k));
+    cout << "; q=" << q;
+  
+    n = p * q;
+    phi = (p - 1) * (q - 1);
+
+    while (true) {
+        e = msp_random(n);
+        if (gcd(e, phi) == 1) {
+            break;
+        }
+    }
+
+    d=evklid_metod(e, phi);
+    cout << "\n phi=" << phi;
+
+    File_keys(e, d, n);
+}
+
+// Transport coding Base-16
+unsigned char transport_coding(unsigned char symbol) {
+   
+    unsigned char table[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };// массив значений для base16
+    symbol = symbol & 0x0F;
+    return table[symbol];
+}
+
+// Transport decoding Base-16
+unsigned char transport_decoding(unsigned char symbol) {
+    unsigned char table[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };
+    int temp;
+
+    if (symbol > 64) {
+        temp = symbol - 7;
+    }
+    else {
+        temp = symbol;
+    }
+
+    temp = temp & 0x0F;
+    return temp;
+}
+
+void crypt() {
+
+    int count = 1;
+
+    int char_b;
+    int ch;
+    unsigned char Block_40b[5];
+    unsigned long block_user1, block_user2, block_crypt1, block_crypt2, temp=0, byte_set=0;
+    unsigned long decrypt;
+    
+    ifstream open("key_public.txt");
+    unsigned long e, n;
+    ifstream user("user.txt");
+    ofstream encrypt("encryption.txt");
+
+    if (user.is_open() && encrypt.is_open() && open.is_open()) {
+
+        open >> (n);     
+        open >> (e);
+        cout << "\n _______________________________________________\n Зашифрування з транспортним кодуванням Base-16:";
+        cout << "\n n=" << n << "; e=" << e<<endl;
+
+        char_b = user.get();
+        while (char_b != EOF) {
+            block_user1 = 0;
+            block_user2 = 0;
+            byte_set = 0;
+    
+           
+            for (int i = 0; i < 2; i++) {
+                if (char_b == EOF) {
+                    break;
+                }
+
+                block_user1 = block_user1+(char_b << byte_set);
+                byte_set += 8;
+                char_b = user.get();
+                ch = char_b;
+
+                if (byte_set==16) {
+                    block_user1 = block_user1 + ((ch>>4) << byte_set);
+                }
+                count++;
+            }
+          
+            byte_set = 0;
+            for (int i = 0; i < 3; i++) {
+                if (char_b == EOF) {
+                    break;
+                }
+                
+                if (i == 0) {
+                    block_user2 = block_user2 + ((char_b&0x0F) << byte_set);
+                    byte_set += 4;
+                    char_b = user.get();
+                }
+                else {
+                    block_user2 = block_user2 + (char_b << byte_set);
+                    byte_set += 8;
+                    char_b = user.get();
+                }
+                count++;
+            }
+           
+            block_crypt1 = mod_power(block_user1, e, n);// Crypt
+            block_crypt2 = mod_power(block_user2, e, n);// Crypt
+           
+            cout << "\n ";
+            unsigned char symbol;
+            unsigned long offset = 20;
+            unsigned long byte4, new_symbol = 0;           
+            for (int i = 0; i < 6; i++) {
+              
+                byte4 = block_crypt1;
+                symbol = byte4 >> offset;
+                symbol = transport_coding(symbol);
+                offset -= 4;     
+                encrypt.put(symbol);
+                cout << char(symbol);
+            }
+
+            cout << "\n ";
+            offset = 20;
+            for (int i = 0; i < 6; i++) {
+                byte4 = block_crypt2;
+                symbol = byte4 >> offset;
+                symbol = transport_coding(symbol);
+                offset -= 4;
+                encrypt.put(symbol);
+                cout << char(symbol);
+            }
+            
+        }
+    }
+    cout << "\n\n COUNT=" << count << "\n\n";
+    user.close();
+    encrypt.close();
+}
+
+void decrypt() {
+
+    int char_b1, char_b2, temp;
+    unsigned long block_crypt1 = 0, block_crypt2 = 0, byte_set = 0;
+    unsigned long block_decrypt1, block_decrypt2;
+    unsigned char block1, block2, block3;
+
+    ifstream secret("key_private.txt");
+    unsigned long d, n;
+
+    ifstream encrypt("encryption.txt");
+    ofstream decrypt("decryption.txt");
+
+    if (decrypt.is_open() && encrypt.is_open() && secret.is_open()) {
+
+        secret >> (n);      
+        secret >> (d);
+        cout << "\n __________________________________________________\n Розшифрування з транспортним декодуванням Base-16:";
+        cout << "\n n=" << n << "; d=" << d << endl<<endl;
+
+        char_b1 = encrypt.get();
+        char_b2 = encrypt.get();
+       
+        while (char_b1 != EOF && char_b2 != EOF) {
+            block_crypt1 = 0;
+            block_crypt2 = 0;
+            byte_set = 16;
+
+            for (int i = 0; i < 3; i++) {
+
+                if (char_b1 == EOF && char_b2 == EOF) {
+                    break;
+                }
+                
+                char_b1 = transport_decoding(char_b1);             
+                char_b2 = transport_decoding(char_b2);
+                
+                temp = (char_b1<<4) | (char_b2);
+                
+                block_crypt1 = block_crypt1 + (temp<<byte_set);
+
+                char_b1 = encrypt.get();
+                char_b2 = encrypt.get();
+                byte_set -= 8;
+            }
+            
+            byte_set = 16;
+            for (int i = 0; i < 3; i++) {
+
+                if (char_b1 == EOF && char_b2 == EOF) {
+                    break;
+                }
+             
+                char_b1 = transport_decoding(char_b1);              
+                char_b2 = transport_decoding(char_b2);
+
+                temp = (char_b1 << 4) | (char_b2);
+
+                block_crypt2 = block_crypt2 + (temp << byte_set);
+
+                char_b1 = encrypt.get();
+                char_b2 = encrypt.get();
+                byte_set -= 8;
+            }
+           
+            block_decrypt1= mod_power(block_crypt1, d, n);
+            block_decrypt2 = mod_power(block_crypt2, d, n);
+            
+                block1 = block_decrypt1;
+                block2 = block_decrypt1 >> 8;
+                cout << block1;
+                cout << block2;
+                decrypt.put(block1);
+                decrypt.put(block2);
+
+                block1 = block_decrypt1 >> 16;
+                block1 = block1 << 4;
+                block2 = block_decrypt2;
+                block2 = block2 & 0x0F;
+                cout <<char( block1 | block2);
+                decrypt.put(block1|block2);
+
+                block1 = block_decrypt2>>4;
+                block2 = block_decrypt2 >> 12;
+                cout << block1;
+                cout << block2;
+                decrypt.put(block1);
+                decrypt.put(block2);
+                
+        }
+    }
+
+    encrypt.close();
+    decrypt.close();
+}
+
+void show_UserText() {
+
+    unsigned int word;
+    ifstream user("user.txt");
+    cout << "\n __________________________\n Вхiдний текст користувача:\n\n";
+    if (user.is_open()) {
+        word = user.get();
+        while (word != EOF) {
+            cout << char(word);
+            word = user.get();
+        }
+    }
+    user.close();
+}
+
+int main()
+{
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    setlocale(LC_ALL, "rus");
+    system("cls");
+
+    cout << "\n\n Шифр RSA. Виконав- Ткаченко Кирило КБ2011(936)\n\n ГПВЧ- Метод серединих добуткiв; Перевiрка на простоту- метод Лемана; блок- 20 бiт\n ";
+    /*
+    cout << "\n Time of system:\n ";
+    cout << st.wYear << "\n ";
+    cout << st.wMonth << "\n ";
+    cout << st.wDay << "\n ";
+    cout << st.wHour << "\n ";
+    cout << st.wMinute << "\n ";
+    cout << st.wSecond << "\n ";
+    cout << st.wMilliseconds << "\n";
+    */
+    seed_time();
+    KeysGen();
+    show_UserText();
+    crypt();
+    decrypt();
+
+    cout << "\n\n\n\n";
+    return 0;
+}
